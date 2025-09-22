@@ -5,7 +5,7 @@ import json
 import socket
 import getpass
 from datetime import datetime, time
-from typing import Dict, Any, List, Tuple, DefaultDict
+from typing import Dict, Any, List, Tuple, DefaultDict, Optional
 from collections import defaultdict, Counter
 from pathlib import Path
 
@@ -49,8 +49,20 @@ def _pick_app(data: Dict[str, Any]) -> str:
     return exe
 
 
-def build_daily_payload(settings: Dict[str, Any]) -> Dict[str, Any]:
-    """Consulta AW y devuelve el payload de resumen diario."""
+def build_daily_payload(settings: Dict[str, Any], meta_extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Consulta ActivityWatch y devuelve el payload de resumen diario.
+
+    Parámetros:
+      - settings: configuración cargada con load_settings()
+      - meta_extra: dict opcional para agregar/mezclar metadatos en payload["meta"]
+        (ej.: {"correlation_id": "...", "marcacion_tipo": "salida"})
+
+    Uso típico:
+      # SOLO en SALIDA desde la UI:
+      payload = build_daily_payload(settings, meta_extra={"correlation_id": cid, "marcacion_tipo": "salida"})
+      send_payload(settings, payload)
+    """
     aw_base = settings["aw_base_url"]
     timeout = settings["request_timeout_sec"]
     top_titles_n = int(settings["top_titles_limit"])
@@ -144,6 +156,19 @@ def build_daily_payload(settings: Dict[str, Any]) -> Dict[str, Any]:
         top_urls = [u for u, _ in domain_urls[dom].most_common(top_urls_n)]
         web_list.append({"domain": dom, "total_sec": round(total, 2), "top_urls": top_urls})
 
+    meta = {
+        "version": "v1",
+        "source": "activitywatch",
+        "generated_at": datetime.now().isoformat(),
+    }
+    # Mezclar metadatos extra si se proporcionan (p.ej. correlation_id, marcacion_tipo="salida")
+    if meta_extra and isinstance(meta_extra, dict):
+        try:
+            meta.update(meta_extra)
+        except Exception:
+            # en caso de valores no serializables
+            meta["meta_extra_error"] = "meta_extra no fusionable; se omitieron algunos campos"
+
     payload = {
         "date": datetime.now().date().isoformat(),
         "hostname": socket.gethostname(),
@@ -154,14 +179,10 @@ def build_daily_payload(settings: Dict[str, Any]) -> Dict[str, Any]:
             "keys": round(keys_count, 2),
             "mouse_dist": round(mouse_dist, 2),
         },
-    # NOTE: puedes añadir más campos si quieres
+        # NOTE: puedes añadir más campos si quieres
         "apps": apps_list,
         "web": web_list,
-        "meta": {
-            "version": "v1",
-            "source": "activitywatch",
-            "generated_at": datetime.now().isoformat(),
-        },
+        "meta": meta,
     }
     return payload
 
