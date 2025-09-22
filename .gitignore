@@ -1,0 +1,18 @@
+﻿# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build/Dist
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+
+# App
+config/settings.json
